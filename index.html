@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2F4BFF">
-<meta name="description" content="twice demo: rent things other VŠE students have only used once.">
+<meta name="description" content="twice demo: rent things people near you have only used once.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -198,9 +198,11 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
   'use strict';
 
   // ───────── Data ─────────
-  var POINT = { id: 'vse', name: 'VŠE campus', address: 'nám. W. Churchilla 1938/4, Praha 3', where: 'Lockers in the New Building (exact spot to be confirmed)' };
+  var POINT = { id: 'eislerova', name: 'Eislerova kolej', address: 'V Zahrádkách 1953/67, Praha 3', where: 'Pickup spot inside the dorm (exact place to be confirmed)' };
   var CATS = ['Study', 'Clothing', 'Party', 'Outdoor', 'Sport', 'Travel', 'Kitchen', 'Tools', 'Home'];
   var USAGES = ['Used once', 'Used 2–3 times', 'Used a few times'];
+  var PLACE_SUGGESTIONS = ['Eislerova kolej', 'Jarov dorms', 'VŠE campus, Žižkov'];
+  var SEED_PLACES = ['VŠE campus, Žižkov', 'Eislerova kolej', 'Jarov dorms', 'Vinohrady, near náměstí Míru', 'Eislerova kolej', 'Žižkov, Jiřího z Poděbrad metro', 'Jarov dorms', 'Eislerova kolej', 'Vršovice', 'Karlín', 'VŠE campus, Žižkov', 'Eislerova kolej'];
   var TINTS = ['var(--accent-soft)', 'var(--warm-soft)', 'var(--surface)'];
   var ICON = {
     Study: 'M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z M4 19V5 M9 7h6 M9 11h4',
@@ -237,11 +239,11 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
       ['Steam iron', 'Home', 30, 300, 'Used once', 'Klára B.', 'For the morning of the interview or presentation. Includes a small ironing mat.']
     ];
     return L.map(function (r, i) {
-      return { id: 'L' + (i + 1), title: r[0], cat: r[1], price: r[2], deposit: r[3], usage: r[4], owner: r[5], desc: r[6], photos: [], tint: TINTS[i % 3], mine: false, active: true, available: true, phone: '+420 7' + String(10 + i) + ' 000 ' + String(100 + i), email: r[5].split(' ')[0].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '') + '@example.com' };
+      return { id: 'L' + (i + 1), place: SEED_PLACES[i], placeDetails: '', title: r[0], cat: r[1], price: r[2], deposit: r[3], usage: r[4], owner: r[5], desc: r[6], photos: [], tint: TINTS[i % 3], mine: false, active: true, available: true, phone: '+420 7' + String(10 + i) + ' 000 ' + String(100 + i), email: r[5].split(' ')[0].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '') + '@example.com' };
     });
   }
 
-  var KEY = 'twice-demo-v1';
+  var KEY = 'twice-demo-v2';
   var store = { listings: seedListings(), bookings: [], me: { name: '', phone: '', email: '' } };
   try {
     var saved = JSON.parse(localStorage.getItem(KEY) || 'null');
@@ -259,13 +261,15 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
   function bookingById(id) { for (var i = 0; i < store.bookings.length; i++) if (store.bookings[i].id === id) return store.bookings[i]; return null; }
   var WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], MO = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   function day(offset) { var d = new Date(); d.setDate(d.getDate() + offset); return WD[d.getDay()] + ' ' + d.getDate() + ' ' + MO[d.getMonth()]; }
+  function placeOf(l) { return l.place || POINT.name; }
+  function detailsOf(l) { return l.placeDetails || (l.place ? 'Agree the exact spot and time with the owner.' : POINT.where); }
   function thumb(l, cls) {
     return '<span class="' + (cls || 'tile') + '" style="background:' + l.tint + '">' + (l.photos[0] ? '<img src="' + l.photos[0] + '" alt="">' : icon(ICON[l.cat] || ICON.Home, cls === 'hero' ? 88 : 40, cls === 'hero' ? 1.2 : 1.6)) + '</span>';
   }
   function listingCard(l, meta, act) {
     return '<button class="listing" data-act="' + (act || 'open') + '" data-id="' + l.id + '">' + thumb(l) +
       '<span class="info"><span class="tt">' + esc(l.title) + '</span>' +
-      '<span class="small muted">' + esc(meta || (POINT.name + ' · ' + l.owner)) + '</span>' +
+      '<span class="small muted">' + esc(meta || (placeOf(l) + ' · ' + l.owner)) + '</span>' +
       '<span class="pill">' + esc(l.usage) + '</span>' +
       '<span style="margin-top:auto;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap"><span class="price num">' + kc(l.price) + ' / day</span><span class="small muted num">+ ' + kc(l.deposit) + ' deposit</span></span></span></button>';
   }
@@ -279,7 +283,7 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
   var route = { name: 'home' };
   var ui = { cat: 'All', q: '', days: 2, start: 0 };
   var draft = newDraft();
-  function newDraft() { return { title: '', cat: '', usage: USAGES[0], desc: '', price: '', deposit: '', name: store.me.name, phone: store.me.phone, email: store.me.email, photos: [], error: '' }; }
+  function newDraft() { return { title: '', cat: '', usage: USAGES[0], desc: '', place: '', placeDetails: '', price: '', deposit: '', name: store.me.name, phone: store.me.phone, email: store.me.email, photos: [], error: '' }; }
   function go(name, params) { route = Object.assign({ name: name }, params || {}); render(); window.scrollTo(0, 0); }
 
   // ───────── Screens ─────────
@@ -289,17 +293,17 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
     var active = store.bookings.filter(function (b) { return b.status !== 'done' && b.status !== 'cancelled'; }).length;
     return '<div class="screen" style="gap:22px">' +
       '<div class="row" style="align-items:center"><span style="display:flex;align-items:center;gap:8px"><span class="brand">twice</span><span class="demo-pill">DEMO</span></span>' +
-      '<span class="chip" style="cursor:default">' + icon(UI.pin, 16) + ' VŠE campus</span></div>' +
+      '<span class="chip" style="cursor:default">' + icon(UI.pin, 16) + ' Prague</span></div>' +
       '<div class="stack" style="gap:10px"><h1 class="h1" style="font-size:36px">What would you like to do?</h1>' +
-      '<p class="muted" style="margin:0">Rent things other students have only used once, or put yours to work. Everything is picked up and returned on campus.</p></div>' +
-      '<button class="choice rent" data-act="go" data-to="rent"><span class="ic">' + icon(UI.search, 26) + '</span><span><span class="t">Rent something</span><span class="s">See what other VŠE students are lending out</span></span></button>' +
+      '<p class="muted" style="margin:0">Rent things people near you have only used once, or put yours to work. The owner chooses the meeting place: a dorm, campus or their own address.</p></div>' +
+      '<button class="choice rent" data-act="go" data-to="rent"><span class="ic">' + icon(UI.search, 26) + '</span><span><span class="t">Rent something</span><span class="s">See what people near you are lending out</span></span></button>' +
       '<button class="choice put" data-act="go" data-to="put"><span class="ic">' + icon(UI.plus, 26) + '</span><span><span class="t">Put something up</span><span class="s">Create an ad and earn from things you rarely need</span></span></button>' +
       (active ? '<button class="btn btn-outline" data-act="go" data-to="account">You have ' + active + ' active ' + (active === 1 ? 'booking' : 'bookings') + '</button>' : '') +
       '<div class="soft"><strong>How it works</strong><div class="steps">' +
       '<div class="step"><span class="n">1</span><span>Pick an item and how many days you need it.</span></div>' +
       '<div class="step"><span class="n">2</span><span>Pay by card. The deposit is only <b>reserved</b> on your card, not taken.</span></div>' +
-      '<div class="step"><span class="n">3</span><span>The owner leaves it in the VŠE lockers and you get an email when it is there.</span></div>' +
-      '<div class="step"><span class="n">4</span><span>Put it back in the same locker. The owner confirms and your deposit is released.</span></div></div></div>' +
+      '<div class="step"><span class="n">3</span><span>Pick it up at the meeting place in the ad. You get an email with the details.</span></div>' +
+      '<div class="step"><span class="n">4</span><span>Return it to the same place. The owner confirms and your deposit is released.</span></div></div></div>' +
       '<p class="small muted" style="margin:0">This is a demo for feedback. Items are examples and payments are simulated: no money moves.</p>' +
       '</div>';
   };
@@ -310,12 +314,12 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
       return l.active && l.available && (ui.cat === 'All' || l.cat === ui.cat) && (!q || (l.title + ' ' + l.desc + ' ' + l.cat).toLowerCase().indexOf(q) >= 0);
     });
     return '<div class="small muted num" style="font-weight:600">' + items.length + (items.length === 1 ? ' item' : ' items') + ' available</div>' +
-      items.map(function (l) { return listingCard(l, POINT.name + ' · ' + l.owner + (l.mine ? ' (you)' : '')); }).join('') +
+      items.map(function (l) { return listingCard(l, placeOf(l) + ' · ' + l.owner + (l.mine ? ' (you)' : '')); }).join('') +
       (items.length ? '' : '<div class="soft"><strong>Nothing here yet</strong><span class="small muted">Try another search or category, or be the first to put something up.</span><button class="btn btn-outline btn-sm" data-act="go" data-to="put">Put something up</button></div>');
   }
 
   screens.rent = function () {
-    return '<div class="screen">' + header('Rent something', 'Pickup & return at ' + POINT.name) +
+    return '<div class="screen">' + header('Rent something', 'Pick up where the owner chooses') +
       '<label class="field" for="q"><span class="label">Search</span><input class="input" id="q" type="search" placeholder="e.g. calculator, suit, tent" value="' + esc(ui.q) + '" data-ui="q"></label>' +
       '<div class="chips-scroll" role="group" aria-label="Category">' + ['All'].concat(CATS).map(function (c) { return '<button class="chip' + (ui.cat === c ? ' on' : '') + '" data-act="cat" data-v="' + c + '" aria-pressed="' + (ui.cat === c) + '">' + c + '</button>'; }).join('') + '</div>' +
       '<div id="results" class="stack" style="gap:18px">' + rentResults() + '</div></div>';
@@ -330,10 +334,10 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
       '<div class="stack"><h1 class="h1" style="font-size:28px">' + esc(l.title) + '</h1><div class="chips"><span class="pill">' + esc(l.usage) + '</span><span class="pill">' + esc(l.cat) + '</span></div></div>' +
       '<div class="row" style="justify-content:flex-start;align-items:center"><span class="avatar">' + esc(l.owner.charAt(0)) + '</span><span><strong style="display:block">' + esc(l.owner) + (l.mine ? ' (you)' : '') + '</strong><span class="small muted">VŠE student</span></span></div>' +
       '<p style="margin:0;line-height:1.5;color:var(--fg-2)">' + esc(l.desc) + '</p>' +
-      '<div class="soft" style="flex-direction:row;align-items:center;gap:12px">' + icon(UI.pin, 22) + '<span><strong style="display:block">Pickup &amp; return at ' + POINT.name + '</strong><span class="small muted">' + esc(POINT.where) + '</span></span></div>' +
+      '<div class="soft" style="flex-direction:row;align-items:center;gap:12px">' + icon(UI.pin, 22) + '<span><strong style="display:block">Pickup &amp; return: ' + esc(placeOf(l)) + '</strong><span class="small muted">The exact spot and the owner\u2019s contact are sent to you after booking.</span></span></div>' +
       (l.mine ? '<div class="note">This is your ad. Other students can rent it from the Rent tab.</div>' :
        !l.available ? '<div class="warmbox"><strong>Currently rented out</strong><span class="small">Check back in a few days.</span></div>' :
-      '<div class="soft"><strong>When do you need it?</strong><span class="small muted">The owner leaves it in the lockers that day.</span><div class="chips">' +
+      '<div class="soft"><strong>When do you need it?</strong><span class="small muted">The owner has it ready at the meeting place that day.</span><div class="chips">' +
         [0, 1].map(function (o) { return '<button class="chip' + (ui.start === o ? ' on' : '') + '" data-act="start" data-v="' + o + '" aria-pressed="' + (ui.start === o) + '">' + (o ? 'Tomorrow' : 'Today') + ' · ' + day(o) + '</button>'; }).join('') + '</div>' +
         '<div class="row" style="align-items:center;margin-top:4px"><span><strong style="display:block">How many days?</strong><span class="small muted">Up to 5 days</span></span>' +
         '<span class="stepper"><button data-act="days" data-v="-1" aria-label="One day less">' + icon(UI.minus, 18, 2.2) + '</button><output class="num" aria-live="polite">' + ui.days + '</output><button data-act="days" data-v="1" aria-label="One day more">' + icon(UI.plus, 18, 2.2) + '</button></span></div></div>' +
@@ -365,11 +369,11 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
     var l = byId(b.listingId);
     return '<div class="screen" style="padding-top:16px;gap:20px">' +
       '<div class="stack" style="text-align:center;gap:12px"><span class="check" style="background:var(--accent);color:var(--on-accent)">' + icon(UI.check, 36, 2.4) + '</span>' +
-      '<h1 class="h1" style="font-size:32px">Reserved!</h1><p class="muted" style="margin:0">We sent you this email. You get another one when the item is in the locker.</p></div>' +
+      '<h1 class="h1" style="font-size:32px">Reserved!</h1><p class="muted" style="margin:0">We sent you this email. You get another one when the item is ready.</p></div>' +
       '<div class="mail"><div class="mail-head"><span class="avatar" style="background:var(--bg)">' + icon(UI.mail, 18) + '</span><span style="min-width:0"><span class="small muted" style="display:block">From twice · just now</span><strong>You booked ' + esc(l.title) + '</strong></span></div>' +
-        '<div class="mail-body"><div>Hi! Your rental is confirmed. ' + esc(l.owner) + ' will leave it at VŠE campus.</div>' +
-        '<dl class="kv"><dt>Pickup point</dt><dd>' + esc(POINT.name) + '</dd><dt>Where exactly</dt><dd>' + esc(POINT.where) + '</dd><dt>Collect on</dt><dd>' + esc(b.startLabel) + '</dd><dt>Return by</dt><dd>' + esc(b.returnLabel) + '</dd><dt>Owner</dt><dd>' + esc(l.owner) + '</dd><dt>Phone</dt><dd class="num">' + esc(l.phone) + '</dd></dl>' +
-        '<div class="note">Your ' + kc(b.deposit) + ' deposit is only reserved. Put the item back in the same locker and it is released.</div></div></div>' +
+        '<div class="mail-body"><div>Hi! Your rental is confirmed. ' + esc(l.owner) + ' will have it ready at ' + esc(placeOf(l)) + '.</div>' +
+        '<dl class="kv"><dt>Meeting place</dt><dd>' + esc(placeOf(l)) + '</dd><dt>Where exactly</dt><dd>' + esc(detailsOf(l)) + '</dd><dt>Collect on</dt><dd>' + esc(b.startLabel) + '</dd><dt>Return by</dt><dd>' + esc(b.returnLabel) + '</dd><dt>Owner</dt><dd>' + esc(l.owner) + '</dd><dt>Phone</dt><dd class="num">' + esc(l.phone) + '</dd></dl>' +
+        '<div class="note">Your ' + kc(b.deposit) + ' deposit is only reserved. Put the item back in the same spot and it is released.</div></div></div>' +
       '<button class="btn btn-ink" data-act="go" data-to="account">See my rentals</button><button class="btn btn-outline" data-act="go" data-to="home">Back to home</button></div>';
   };
 
@@ -385,8 +389,11 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
       '<div class="field">Category<div class="chips">' + CATS.map(function (c) { return '<button class="chip' + (d.cat === c ? ' on' : '') + '" data-act="fcat" data-v="' + c + '" aria-pressed="' + (d.cat === c) + '">' + c + '</button>'; }).join('') + '</div></div>' +
       '<div class="field">How much has it been used?<div class="chips">' + USAGES.map(function (u) { return '<button class="chip' + (d.usage === u ? ' on' : '') + '" data-act="fusage" data-v="' + u + '" aria-pressed="' + (d.usage === u) + '">' + u + '</button>'; }).join('') + '</div></div>' +
       '<label class="field" for="f-desc">Short description<textarea class="input" id="f-desc" maxlength="600" placeholder="Size, condition, what is included" data-f="desc">' + esc(d.desc) + '</textarea></label>' +
-      '<div class="field">Where will you leave it?<div class="pick">' + icon(UI.pin, 20) + '<span><span style="display:block;font-weight:700">' + POINT.name + '</span><span class="small muted" style="font-weight:400">' + esc(POINT.where) + '</span></span></div>' +
-        '<span class="hint">When someone books it, you leave it in the locker and they collect it. They bring it back to the same place.</span></div>' +
+      '<div class="stack" style="gap:10px"><label class="field" for="f-place">Meeting place for the exchange<input class="input" id="f-place" maxlength="80" placeholder="e.g. Eislerova kolej, or your street" value="' + esc(d.place) + '" data-f="place"></label>' +
+        '<div class="chips" role="group" aria-label="Suggestions">' + PLACE_SUGGESTIONS.map(function (p) { return '<button class="chip' + (d.place === p ? ' on' : '') + '" data-act="fplace" data-v="' + esc(p) + '" aria-pressed="' + (d.place === p) + '">' + icon(UI.pin, 14) + ' ' + esc(p) + '</button>'; }).join('') + '</div>' +
+        '<span class="hint">Shown in your ad, so renters know roughly where it is. Pick a public place or your building, not your room number.</span>' +
+        '<label class="field" for="f-pdetails"><span>Exact spot or address <span class="muted" style="font-weight:400">(optional)</span></span><input class="input" id="f-pdetails" maxlength="120" placeholder="e.g. Reception, ground floor, or Vinohradská 12" value="' + esc(d.placeDetails) + '" data-f="placeDetails"></label>' +
+        '<span class="hint">Only sent to the renter after they have paid.</span></div>' +
       '<div class="stack"><div class="grid2"><label class="field" for="f-price">Price per day<span class="money"><input id="f-price" inputmode="numeric" placeholder="50" value="' + esc(d.price) + '" data-f="price"><span>Kč</span></span></label>' +
         '<label class="field" for="f-dep">Deposit<span class="money"><input id="f-dep" inputmode="numeric" placeholder="500" value="' + esc(d.deposit) + '" data-f="deposit"><span>Kč</span></span></label></div>' +
         '<span class="hint">The deposit is only reserved on the renter’s card. If your item comes back damaged, you can keep part or all of it.</span></div>' +
@@ -402,14 +409,14 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
     var l = byId(route.id); if (!l) return screens.home();
     return '<div class="screen" style="padding-top:16px;gap:20px"><div class="stack" style="text-align:center;gap:12px">' +
       '<span class="check" style="background:var(--warm);color:var(--on-warm)">' + icon(UI.check, 36, 2.4) + '</span>' +
-      '<h1 class="h1" style="font-size:32px">Your ad is live</h1><p class="muted" style="margin:0">Other VŠE students can now find and rent it.</p></div>' +
-      '<span class="label">How renters see it</span>' + listingCard(l, POINT.name + ' · ' + l.owner) +
-      '<div class="note">When someone books it, we email you. Leave it in the lockers and tap “I’ve dropped it off” in Account.</div>' +
+      '<h1 class="h1" style="font-size:32px">Your ad is live</h1><p class="muted" style="margin:0">People near you can now find and rent it.</p></div>' +
+      '<span class="label">How renters see it</span>' + listingCard(l, placeOf(l) + ' · ' + l.owner) +
+      '<div class="note">When someone books it, we email you. Have it ready at your meeting place and tap “I’ve dropped it off” in Account.</div>' +
       '<button class="btn btn-ink" data-act="simulate" data-id="' + l.id + '">Simulate: a student books it</button>' +
       '<button class="btn btn-outline" data-act="go" data-to="home">Back to home</button></div>';
   };
 
-  var STEPS = [['paid', 'Paid · waiting for drop-off'], ['ready', 'In the locker · ready to collect'], ['returned', 'Put back · owner checking'], ['done', 'Returned · deposit released']];
+  var STEPS = [['paid', 'Paid · waiting for drop-off'], ['ready', 'Ready at the meeting place'], ['returned', 'Put back · owner checking'], ['done', 'Returned · deposit released']];
   function timeline(b) {
     var idx = STEPS.map(function (s) { return s[0]; }).indexOf(b.status);
     return '<div class="timeline">' + STEPS.map(function (s, i) { return '<div class="tl' + (i < idx || b.status === 'done' ? ' done' : i === idx ? ' now' : '') + '"><span class="dot"></span><span' + (i === idx ? ' style="font-weight:700"' : ' class="muted"') + '>' + s[1] + '</span></div>'; }).join('') + '</div>';
@@ -442,7 +449,7 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
     var ads = store.listings.filter(function (l) { return l.mine; });
     return '<div class="screen" style="gap:24px"><div class="row" style="align-items:center"><h1 class="h2">Your account</h1><span class="demo-pill">DEMO</span></div>' +
       '<section class="stack" style="gap:10px"><span class="label">Things you rented</span>' + (mine.length ? mine.map(bookingCard).join('') : '<span class="small muted">Nothing yet. Rent something to see the whole flow.</span>') + '</section>' +
-      '<section class="stack" style="gap:10px"><span class="label">Your ads</span>' + (ads.length ? ads.map(function (l) { return listingCard(l, l.available ? 'Live · ' + POINT.name : 'Rented out'); }).join('') : '<span class="small muted">You have not put anything up yet.</span>') + '</section>' +
+      '<section class="stack" style="gap:10px"><span class="label">Your ads</span>' + (ads.length ? ads.map(function (l) { return listingCard(l, l.available ? 'Live · ' + placeOf(l) : 'Rented out'); }).join('') : '<span class="small muted">You have not put anything up yet.</span>') + '</section>' +
       (theirs.length ? '<section class="stack" style="gap:10px"><span class="label">Bookings of your items</span>' + theirs.map(bookingCard).join('') + '</section>' : '') +
       '<div class="soft"><strong>About this demo</strong><span class="small">Items and other students are examples. Payments, emails and the other person’s steps are simulated so you can try both sides. Everything is saved only on this phone.</span>' +
       '<button class="btn btn-outline btn-sm" data-act="reset">Reset demo</button></div></div>';
@@ -475,6 +482,7 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
     else if (a === 'confirm') { var l = byId(id); if (!l || !l.available) { toast('Sorry, someone just booked it.'); go('rent'); return; } var b = makeBooking(l, 'renter'); go('booked', { id: b.id }); }
     else if (a === 'fcat') { draft.cat = v; render(); }
     else if (a === 'fusage') { draft.usage = v; render(); }
+    else if (a === 'fplace') { draft.place = v; render(); }
     else if (a === 'rmphoto') { draft.photos.splice(Number(v), 1); render(); }
     else if (a === 'publish') publish();
     else if (a === 'simulate') { var l2 = byId(id); if (l2 && l2.available) { ui.days = 2; ui.start = 0; makeBooking(l2, 'owner', ['Eliška T.', 'Martin K.', 'Chiara F.'][Math.floor(Math.random() * 3)]); toast('A student booked your item. Check Account.'); go('account'); } }
@@ -482,7 +490,7 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
       var bk = bookingById(id); if (!bk) return; bk.status = v;
       if (v === 'done') { var li = byId(bk.listingId); if (li) li.available = true; }
       save(); render();
-      toast({ ready: bk.role === 'owner' ? 'The renter was emailed: it is in the locker.' : 'Email: your item is in the locker.', returned: bk.role === 'owner' ? 'Email: the renter put it back.' : 'Thanks! The owner will check it.', done: bk.role === 'owner' ? 'Rent paid out, deposit released.' : 'Deposit released. Only the rent was charged.' }[v]);
+      toast({ ready: bk.role === 'owner' ? 'The renter was emailed: it is ready.' : 'Email: your item is ready at the meeting place.', returned: bk.role === 'owner' ? 'Email: the renter put it back.' : 'Thanks! The owner will check it.', done: bk.role === 'owner' ? 'Rent paid out, deposit released.' : 'Deposit released. Only the rent was charged.' }[v]);
     }
     else if (a === 'cancel') { var bc = bookingById(id); if (bc) { bc.status = 'cancelled'; var lc = byId(bc.listingId); if (lc) lc.available = true; save(); render(); toast('Cancelled. Nothing was charged.'); } }
     else if (a === 'reset') {
@@ -529,10 +537,11 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
     if (d.title.trim().length < 3) d.error = 'Give your item a title.';
     else if (!d.cat) d.error = 'Choose a category.';
     else if (!(price >= 10)) d.error = 'Set a price of at least 10 Kč per day.';
+    else if (!d.place.trim()) d.error = 'Add a meeting place for the exchange.';
     else if (!d.name.trim() || !/^\S+@\S+\.\S+$/.test(d.email.trim())) d.error = 'Add your name and a valid email.';
     if (d.error) { render(); window.scrollTo(0, 0); return; }
     store.me = { name: d.name.trim(), phone: d.phone.trim(), email: d.email.trim() };
-    var l = { id: 'M' + Date.now(), title: d.title.trim(), cat: d.cat, price: price, deposit: dep, usage: d.usage, owner: d.name.trim(), desc: d.desc.trim() || 'No description yet.', photos: d.photos.slice(), tint: 'var(--warm-soft)', mine: true, active: true, available: true, phone: d.phone.trim() || '—', email: d.email.trim() };
+    var l = { id: 'M' + Date.now(), place: d.place.trim(), placeDetails: d.placeDetails.trim(), title: d.title.trim(), cat: d.cat, price: price, deposit: dep, usage: d.usage, owner: d.name.trim(), desc: d.desc.trim() || 'No description yet.', photos: d.photos.slice(), tint: 'var(--warm-soft)', mine: true, active: true, available: true, phone: d.phone.trim() || '—', email: d.email.trim() };
     store.listings.unshift(l);
     if (!save()) { l.photos = l.photos.slice(0, 1); if (!save()) toast('Saved for this session only (phone storage is full).'); }
     draft = newDraft(); go('live', { id: l.id });

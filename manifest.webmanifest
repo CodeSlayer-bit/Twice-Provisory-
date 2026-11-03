@@ -1,7 +1,7 @@
 {
   "name": "twice (demo)",
   "short_name": "twice",
-  "description": "Rent things other VŠE students have only used once.",
+  "description": "Rent things people near you have only used once.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
